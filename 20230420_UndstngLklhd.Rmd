@@ -7,5 +7,69 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(emg)
+load("Data/PubData.RData")
+```
+
+# Likelihood Graph
+
+```{r LG_specificAge}
+Div_C1 <- Division[[1]]
+
+Div_C1 %>%
+  {which(. == 1, arr.ind = T)} %>%
+  as.data.frame() %>%
+  arrange(row) %>%
+  group_by(row) %>%
+  mutate(min_col = min(col)) %>%
+  distinct(row,min_col) -> LG_firstDivEvent
+
+GAD_IMTBefD_High %>%
+  emg.mle() %>%
+  coef() -> LG_emgIMT
+
+```
+
+Having the time to division values, now i am interested in plotting the likelohood as function of age 'a'. 
+
+How does Likelihood (given, right now, just by the conditional probability 
+P(t = a+t2d|t>= a) )
+
+
+```{r LG_CP}
+
+LG_firstDivEvent$min_col %>%
+  unlist(use.names = F) %>%
+  {./2} -> LG_t2d #converting to time (in hours) 
+
+
+LG_CP_theo <- list()
+for(age in seq(0,100, 0.5)){
+  LG_CP_theo_demg <- demg(age+LG_t2d, 
+                          mu = LG_emgIMT["mu"],
+                          sigma = LG_emgIMT["sigma"],
+                          lambda = LG_emgIMT["lambda"])
+  LG_CP_theo_surv <- pemg(age,
+                          mu = LG_emgIMT["mu"],
+                          sigma = LG_emgIMT["sigma"],
+                          lambda = LG_emgIMT["lambda"],
+                          lower.tail = F) %>% unname()
+  LG_CP_theo[[as.character(age)]] <- LG_CP_theo_demg/LG_CP_theo_surv
+}
+
+LG_CP_theo %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "CellNo") %>%
+  pivot_longer(cols = !CellNo,
+               names_to = "Age",
+               names_prefix = "X",
+               values_to = "CP") %>%
+  mutate(Age = as.numeric(Age),
+         CellNo = as.numeric(CellNo)) %>%
+  filter(CellNo < 20) %>%
+  ggplot()+
+  theme_bw()+
+  geom_line(aes(x = Age, y = CP, col = as.factor(CellNo)))
 ```
 
